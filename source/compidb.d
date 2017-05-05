@@ -27,6 +27,12 @@ struct Command {
 }
 
 
+struct Flags {
+    string payload;
+    alias payload this;
+}
+
+
 struct RuleName {
     string payload;
     alias payload this;
@@ -57,6 +63,22 @@ Command compilerEdit(Command cmd, Compiler new_cc) {
     return Command(to!string(s.joiner(" ")));
 }
 
+Makefile toMakefile(CompilationDatabase comp_db, Compiler cc, Flags flags) {
+    import std.path : baseName;
+    import std.array : split;
+
+    Makefile make_out;
+    string[] rules_name;
+    for(int i = 0; i < comp_db.array.length; i++) {
+        RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+        Command command = compilerEdit(Command(comp_db[i]["command"].str ~ " " ~ flags), cc);
+
+        make_out.rules_name ~= name;
+        make_out.rules ~= MakefileRule(name, command);
+    }
+
+    return make_out;
+}
 
 Makefile toMakefile(CompilationDatabase comp_db, Compiler cc) {
     import std.path : baseName;
@@ -75,6 +97,22 @@ Makefile toMakefile(CompilationDatabase comp_db, Compiler cc) {
     return make_out;
 }
 
+Makefile toMakefile(CompilationDatabase comp_db, Flags flags) {
+    import std.path : baseName;
+    import std.array : split;
+
+    Makefile make_out;
+    string[] rules_name;
+    for(int i = 0; i < comp_db.array.length; i++) {
+        RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+        Command command = Command(comp_db[i]["command"].str ~ " " ~ flags);
+
+        make_out.rules_name ~= name;
+        make_out.rules ~= MakefileRule(name, command);
+    }
+
+    return make_out;
+}
 
 Makefile toMakefile(CompilationDatabase comp_db) {
     import std.path : baseName;
@@ -119,19 +157,51 @@ CompilationDatabase parse(FileName file_name) {
 
 int main(string[] args) {
     import std.file : write;
+    import std.getopt;
 
-    writeln(args.length);
-    if(args.length < 2 || args.length > 3) {
-        logger.error("\nUsage: " ~ args[0] ~ " compilation_database " ~ "[compiler]");
+    string compiler;
+    string compilation_database;
+    string addtional_flags;
+    string output_makefile = "Makefile";
+
+    try {
+        auto helpInformation = getopt(
+            args,
+            std.getopt.config.passThrough,
+            "compile-db|c", "REQUIRED: compilation database to make into a Makefile", &compilation_database,
+            "compiler|x", "OPTIONAL: Change the compiler", &compiler,
+            "addtional-flags|f", "OPTIONAL: Additional flags to supply to the compiler", &addtional_flags,
+            "output|o", "OPTIONAL: output file name", &output_makefile);
+
+        if (helpInformation.helpWanted)
+        {
+            defaultGetoptPrinter("Usage:",
+                    helpInformation.options);
+            return 1;
+        }
+
+        if(compilation_database.length == 0) {
+            defaultGetoptPrinter("Usage:",
+                    helpInformation.options);
+            return 1;
+        }
+
+        CompilationDatabase comp_db = parse(FileName(compilation_database));
+
+        if (compiler.length != 0 && addtional_flags.length != 0) {
+            write(output_makefile, (generate(toMakefile(comp_db, Compiler(compiler), Flags(addtional_flags)))));
+        } else if(compiler.length != 0 && addtional_flags.length == 0) {
+            write(output_makefile, (generate(toMakefile(comp_db, Compiler(compiler)))));
+        } else if(compiler.length == 0 && addtional_flags.length != 0) {
+            write(output_makefile, (generate(toMakefile(comp_db, Flags(addtional_flags)))));
+        } else {
+            write(output_makefile, (generate(toMakefile(comp_db))));
+        }
+
+    } catch(GetOptException e) {
+        writeln("Unknown flag in arguments...");
         return 1;
-    }
 
-    CompilationDatabase comp_db = parse(FileName(args[1]));
-
-    if (args.length == 2) {
-        write("makefile", (generate(toMakefile(comp_db))));
-    } else if(args.length == 3) {
-        write("makefile", (generate(toMakefile(comp_db, Compiler(args[2])))));
     }
 
     return 0;
