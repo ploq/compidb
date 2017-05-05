@@ -5,8 +5,11 @@ Just a simple CMake compilation database to Makefile.
 
 ```
 Usage:
-./compidb compile_db [new_compiler]
+./compidb -c compile_db [OPTIONS]
 
-compile_db   = path to compilation database
-new_compiler = change compiler of all rules in output Makefile
+Options:
+-c|--compile-db   = path to compilation database
+-x|--compiler = Change compiler of all rules
+-f|--additonal-flags = Add compiler/linker flags to end of rule
+-o|--output = Change file name of output file
 ```
