@@ -77,7 +77,9 @@ OutputFile getOutputFile(Command cmd) {
     import std.array : array;
     auto s = splitter(cmd.payload, " ").array;
     auto index = to!int(s.countUntil("-o"));
-
+    if (index == -1) {
+        return OutputFile("");
+    }
     return OutputFile(s[index+1]);
 }
 
