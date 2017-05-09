@@ -2,6 +2,8 @@ import logger = std.experimental.logger;
 import std.json;
 import std.stdio;
 
+import std.algorithm : canFind;
+
 
 struct Compiler {
     string payload;
@@ -50,10 +52,15 @@ struct MakefileRule {
     Command command;
 }
 
+struct OutputFile {
+    string payload;
+    alias payload this;
+}
 
 struct Makefile {
     MakefileRule[] rules;
     RuleName[] rules_name;
+    OutputFile[] outputs;
 }
 
 Compiler getCompiler(Makefile makefile) {
@@ -64,6 +71,16 @@ Compiler getCompiler(Makefile makefile) {
     return Compiler(splitter(to!string(makefile.rules[0].command), " ").array[0]);
 }
 
+OutputFile getOutputFile(Command cmd) {
+    import std.conv : to;
+    import std.algorithm : splitter, countUntil;
+    import std.array : array;
+    auto s = splitter(cmd.payload, " ").array;
+    auto index = to!int(s.countUntil("-o"));
+
+    return OutputFile(s[index+1]);
+}
+
 Command outputPurge(Command cmd) {
     import std.algorithm : splitter, joiner, countUntil;
     import std.array : array;
@@ -71,7 +88,6 @@ Command outputPurge(Command cmd) {
     import std.path : baseName;
 
     auto s = splitter(cmd.payload, " ").array;
-    writeln(s.countUntil("-o"));
     auto index = to!int(s.countUntil("-o"));
     s[index+1] = baseName(s[index+1]);
 
@@ -99,10 +115,14 @@ Makefile toMakefile(CompilationDatabase comp_db, Compiler cc, Flags flags) {
     string[] rules_name;
     for(int i = 0; i < comp_db.array.length; i++) {
         RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+        if (make_out.rules_name.canFind(name)) {
+            name = name.payload ~ ".pp";
+        }
         Command command = compilerEdit(Command(comp_db[i]["command"].str ~ " " ~ flags), cc);
 
         make_out.rules_name ~= name;
         make_out.rules ~= MakefileRule(name, command);
+        make_out.outputs ~= getOutputFile(command);
     }
 
     return make_out;
@@ -116,10 +136,14 @@ Makefile toMakefile(CompilationDatabase comp_db, Compiler cc, Flags flags, bool 
     string[] rules_name;
     for(int i = 0; i < comp_db.array.length; i++) {
         RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+       if (make_out.rules_name.canFind(name)) {
+            name = name.payload ~ ".pp";
+        }
         Command command = outputPurge(compilerEdit(Command(comp_db[i]["command"].str ~ " " ~ flags), cc));
 
         make_out.rules_name ~= name;
         make_out.rules ~= MakefileRule(name, command);
+        make_out.outputs ~= getOutputFile(command);
     }
 
     return make_out;
@@ -133,10 +157,14 @@ Makefile toMakefile(CompilationDatabase comp_db, Compiler cc) {
     string[] rules_name;
     for(int i = 0; i < comp_db.array.length; i++) {
         RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+        if (make_out.rules_name.canFind(name)) {
+            name = name.payload ~ ".pp";
+        }
         Command command = compilerEdit(Command(comp_db[i]["command"].str), cc);
 
         make_out.rules_name ~= name;
         make_out.rules ~= MakefileRule(name, command);
+        make_out.outputs ~= getOutputFile(command);
     }
 
     return make_out;
@@ -150,10 +178,14 @@ Makefile toMakefile(CompilationDatabase comp_db, Compiler cc, bool out_dir) {
     string[] rules_name;
     for(int i = 0; i < comp_db.array.length; i++) {
         RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+        if (make_out.rules_name.canFind(name)) {
+            name = name.payload ~ ".pp";
+        }
         Command command = outputPurge(compilerEdit(Command(comp_db[i]["command"].str), cc));
 
         make_out.rules_name ~= name;
         make_out.rules ~= MakefileRule(name, command);
+        make_out.outputs ~= getOutputFile(command);
     }
 
     return make_out;
@@ -167,10 +199,14 @@ Makefile toMakefile(CompilationDatabase comp_db, Flags flags) {
     string[] rules_name;
     for(int i = 0; i < comp_db.array.length; i++) {
         RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+        if (make_out.rules_name.canFind(name)) {
+            name = name.payload ~ ".pp";
+        }
         Command command = Command(comp_db[i]["command"].str ~ " " ~ flags);
 
         make_out.rules_name ~= name;
         make_out.rules ~= MakefileRule(name, command);
+        make_out.outputs ~= getOutputFile(command);
     }
 
     return make_out;
@@ -185,10 +221,14 @@ Makefile toMakefile(CompilationDatabase comp_db, Flags flags, bool out_dir) {
     string[] rules_name;
     for(int i = 0; i < comp_db.array.length; i++) {
         RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+        if (make_out.rules_name.canFind(name)) {
+            name = name.payload ~ ".pp";
+        }
         Command command = outputPurge(Command(comp_db[i]["command"].str ~ " " ~ flags));
 
         make_out.rules_name ~= name;
         make_out.rules ~= MakefileRule(name, command);
+        make_out.outputs ~= getOutputFile(command);
     }
 
     return make_out;
@@ -202,10 +242,14 @@ Makefile toMakefile(CompilationDatabase comp_db) {
     string[] rules_name;
     for(int i = 0; i < comp_db.array.length; i++) {
         RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+        if (make_out.rules_name.canFind(name)) {
+            name = name.payload ~ ".pp";
+        }
         Command command = Command(comp_db[i]["command"].str);
 
         make_out.rules_name ~= name;
         make_out.rules ~= MakefileRule(name, command);
+        make_out.outputs ~= getOutputFile(command);
     }
 
     return make_out;
@@ -219,10 +263,14 @@ Makefile toMakefile(CompilationDatabase comp_db, bool out_dir) {
     string[] rules_name;
     for(int i = 0; i < comp_db.array.length; i++) {
         RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
+        if (make_out.rules_name.canFind(name)) {
+            name = name.payload ~ ".pp";
+        }
         Command command = outputPurge(Command(comp_db[i]["command"].str));
 
         make_out.rules_name ~= name;
         make_out.rules ~= MakefileRule(name, command);
+        make_out.outputs ~= getOutputFile(command);
     }
 
     return make_out;
@@ -255,6 +303,7 @@ version(none) {
 int main(string[] args) {
     import std.file : write;
     import std.getopt;
+    import std.path;
 
     string compiler;
     string compilation_database;
