@@ -12,6 +12,7 @@ struct Compiler {
 
 
 struct CompilationDatabase {
+    CDBFileName name;
     JSONValue payload;
     alias payload this;
 }
@@ -71,6 +72,26 @@ Compiler getCompiler(Makefile makefile) {
     return Compiler(splitter(to!string(makefile.rules[0].command), " ").array[0]);
 }
 
+Command absPaths(Command cmd, string base) {
+    //buildNormalizedPath
+    import std.algorithm : splitter;
+    import std.path : absolutePath, buildNormalizedPath;
+    import std.conv : to;
+
+    Command new_cmd;
+    auto s = splitter(to!string(cmd), " ");
+    foreach(flag ; s) {
+        if(flag.length != 0 && flag[0..2] == "-I") {
+            new_cmd.payload ~= " -I" ~ absolutePath(buildNormalizedPath(flag[2..$]), base) ~ " ";
+        }
+        else {
+            new_cmd.payload ~= flag ~ " ";
+        }
+    }
+
+    return new_cmd;
+}
+
 OutputFile getOutputFile(Command cmd) {
     import std.conv : to;
     import std.algorithm : splitter, countUntil;
@@ -120,6 +141,7 @@ Makefile toMakefile(CompilationDatabase comp_db, Compiler cc, Flags flags) {
         if (make_out.rules_name.canFind(name)) {
             name = name.payload ~ ".pp";
         }
+
         Command command = compilerEdit(Command(comp_db[i]["command"].str ~ " " ~ flags), cc);
 
         make_out.rules_name ~= name;
@@ -237,17 +259,19 @@ Makefile toMakefile(CompilationDatabase comp_db, Flags flags, bool out_dir) {
 }
 
 Makefile toMakefile(CompilationDatabase comp_db) {
-    import std.path : baseName;
+    import std.path : baseName, dirName;
     import std.array : split;
 
     Makefile make_out;
     string[] rules_name;
+
     for(int i = 0; i < comp_db.array.length; i++) {
         RuleName name = RuleName(baseName(comp_db[i]["file"].str) ~ ".o");
         if (make_out.rules_name.canFind(name)) {
             name = name.payload ~ ".pp";
         }
-        Command command = Command(comp_db[i]["command"].str);
+
+        Command command = absPaths(Command(comp_db[i]["command"].str), dirName(comp_db.name));
 
         make_out.rules_name ~= name;
         make_out.rules ~= MakefileRule(name, command);
@@ -298,10 +322,10 @@ CompilationDatabase parse(CDBFileName file_name) {
     import std.file : readText;
 
     string json = readText(file_name);
-    return CompilationDatabase(parseJSON(json));
+    return CompilationDatabase(file_name, parseJSON(json));
 }
 
-version(none) {
+version(all) {
 int main(string[] args) {
     import std.file : write;
     import std.getopt;
